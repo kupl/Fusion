@@ -1,0 +1,14 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package main
+
+ensures res == struct {Number int}{Number: 42}
+func foo() (res struct {Number int})
+
+func main() {
+    res1 := foo()
+    assert res1 == struct {Number int}{42}
+    res2 := foo()
+    assert res2 == struct {Number int;}{42}
+}

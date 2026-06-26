@@ -1,0 +1,28 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package main
+
+// this testcase checks whether the correct proof obligations are used for checking behavioral subtyping of an imported
+// interface that specifies termination measures for the interface members.
+
+// ##(-I ./)
+import f "foo"
+
+type FooImpl2 struct{}
+
+// Rejected: method without a termination measure tries to implement method with termination measure
+//:: ExpectedOutput(type_error)
+pure func (foo FooImpl2) PureFn() bool {
+    return true
+}
+
+// Rejected: method without a termination measure tries to implement method with termination measure
+//:: ExpectedOutput(type_error)
+func (foo FooImpl2) Fn() bool {
+    return true
+}
+
+func triggerSubtype() f.Foo {
+    return FooImpl2{}
+}

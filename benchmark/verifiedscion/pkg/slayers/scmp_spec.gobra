@@ -1,0 +1,74 @@
+// Copyright 2020 Anapaya Systems
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// +gobra
+
+package slayers
+
+import (
+	"github.com/google/gopacket"
+
+	. "github.com/scionproto/scion/verification/utils/definitions"
+	"github.com/scionproto/scion/verification/utils/slices"
+)
+
+pred (s *SCMP) NonInitMem() {
+	acc(&s.TypeCode) &&
+	acc(&s.Checksum) &&
+	acc(&s.BaseLayer) &&
+	acc(&s.scn) &&
+	(s.scn != nil ==> s.scn.ChecksumMem())
+}
+
+pred (s *SCMP) Mem(ub []byte) {
+	acc(&s.TypeCode) &&
+	acc(&s.Checksum) &&
+	s.BaseLayer.Mem(ub, 4) &&
+	acc(&s.scn) &&
+	(s.scn != nil ==> s.scn.ChecksumMem())
+}
+
+ghost
+requires s.Mem(ub)
+ensures  s.NonInitMem()
+decreases
+func (s *SCMP) DowngradePerm(ghost ub []byte) {
+	unfold s.Mem(ub)
+	unfold s.BaseLayer.Mem(ub, 4)
+	fold s.NonInitMem()
+}
+
+requires false
+func (b *SCMP) LayerContents() (res []byte) {
+	res = b.BaseLayer.LayerContents()
+	return res
+}
+
+preserves acc(b.Mem(ub), R20)
+ensures   0 <= start && start <= end && end <= len(ub)
+ensures   len(res) == end - start
+ensures   res === ub[start:end]
+decreases
+func (b *SCMP) LayerPayload(ghost ub []byte) (res []byte, ghost start int, ghost end int) {
+	unfold acc(b.Mem(ub), R20)
+	res = b.BaseLayer.LayerPayload(ub, 4)
+	start = 4
+	end = len(ub)
+	fold acc(b.Mem(ub), R20)
+	return res, start, end
+}
+
+(*SCMP) implements gopacket.Layer
+(*SCMP) implements gopacket.SerializableLayer
+(*SCMP) implements gopacket.DecodingLayer

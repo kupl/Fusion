@@ -1,0 +1,124 @@
+[
+  {
+    "include": [
+      "**/*.scala",
+      "**/*.vpr",
+      "**/*.go",
+      "build.sbt",
+      "src/main/resources/stubs/github.com/**/*.gobra",
+      "**/Gobra*.g4"
+    ],
+    "exclude": [
+      "carbon/**",
+      "silicon/**",
+      "silver/**",
+      "viperserver/**",
+      "project/project/**",
+      "project/target/**",
+      "target/**",
+      "src/test/resources/**/*.go",
+      "src/test/scala/viper/gobra/parsing/GoParserUnitTests.scala"
+    ],
+    "license": "./.github/license-check/headers/MPLv2-ETH.txt"
+  },
+  {
+    "include": [
+      "**/Dockerfile",
+      "**/*.sh",
+      "**/*.toml"
+    ],
+    "exclude": [
+      "carbon/**",
+      "silicon/**",
+      "silver/**",
+      "viperserver/**"
+    ],
+    "license": "./.github/license-check/headers/MPLv2-ETH-hashtags.txt"
+  },
+  {
+    "include": [
+      "**/*.xml"
+    ],
+    "exclude": [
+      "carbon/**",
+      "silicon/**",
+      "silver/**",
+      "viperserver/**",
+      "project/project/**",
+      "project/target/**",
+      "target/**"
+    ],
+    "license": "./.github/license-check/headers/MPLv2-ETH-xml.txt"
+  },
+  {
+    "include": [
+      "**/*.gobra",
+      "src/test/resources/**/*.go",
+      "GobraChopper.conf"
+    ],
+    "exclude": [
+      "project/project/**",
+      "project/target/**",
+      "target/**",
+      "src/main/**",
+      "src/test/resources/regressions/issues/windows-line-ending/**"
+    ],
+    "license": "./.github/license-check/headers/CC0.txt"
+  },
+  {
+    "include": [
+      "src/main/resources/stubs/fmt/fmt.gobra"
+    ],
+    "license": "./.github/license-check/headers/CC0.txt"
+  },
+  {
+    "include": [
+      "src/test/resources/regressions/issues/windows-line-ending/*.gobra"
+    ],
+    "license": "./.github/license-check/headers/CC0-Windows.txt"
+  },
+  {
+    "include": [
+      "carbon/**",
+      "silicon/**",
+      "silver/**",
+      "viperserver/**",
+      "project/build.properties",
+      "project/plugins.sbt",
+      "project/project/**",
+      "project/target/**",
+      "target/**",
+      "tmp/**",
+      "**/*.json",
+      "**/*.log",
+      ".github/check-license/**",
+      "**/README.md",
+      "**/LICENSE",
+      "docs/**",
+      "artifact/content/paper.pdf",
+      "artifact/content/tutorial.md",
+      "artifact/evaluation/**",
+      "src/main/java/**/*.java"
+    ]
+  },
+  {
+    "include": [
+      "src/main/**/*.gobra",
+      "src/test/scala/viper/gobra/parsing/GoParserUnitTests.scala"
+    ],
+    "exclude": [
+      "src/main/resources/stubs/github.com/**/*.gobra",
+      "src/main/resources/stubs/fmt/fmt.gobra"
+    ],
+    "license": "./.github/license-check/headers/Go.txt"
+  },
+  {
+    "include": [
+      "src/main/**/*.g4"
+    ],
+    "exclude": [
+      "src/main/**/Gobra*.g4"
+    ],
+    "license": "./.github/license-check/headers/BSD-3-SIDM.txt"
+  }
+]

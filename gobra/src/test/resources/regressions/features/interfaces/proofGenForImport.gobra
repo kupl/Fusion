@@ -1,0 +1,19 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+// checks whether an implementation proof is generated even though the interface & implementation are located in an
+// imported package and not used in the current package
+
+package client
+
+// ##(-I ./)
+
+import pkg "proofGenForImportPkg"
+
+func client() {
+    impl := getImpl()
+    impl.LibraryFn()
+}
+
+ensures acc(res) && res.Itf != nil
+func getImpl() (res *pkg.ImplPkgState)

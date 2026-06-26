@@ -1,0 +1,9 @@
+.cache
+project/project/**
+project/target/**
+target/**
+bin/**
+.idea/
+.idea_modules/
+*.iml
+.DS_Store

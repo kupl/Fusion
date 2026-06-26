@@ -1,0 +1,6 @@
+==== host.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/addr/host.go \
+benchmark/verifiedscion/pkg/addr/host_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########

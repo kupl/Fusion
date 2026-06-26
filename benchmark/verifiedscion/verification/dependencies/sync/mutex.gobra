@@ -1,0 +1,45 @@
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in https://golang.org/LICENSE
+
+// +gobra
+
+package sync
+
+type Mutex struct {
+	state int32
+	stema uint32
+}
+
+pred (m *Mutex) LockP()
+pred (m *Mutex) UnlockP()
+
+ghost
+trusted
+requires m.LockP()
+decreases
+pure func (m *Mutex) LockInv() pred()
+
+ghost
+trusted
+requires inv() && acc(m) && *m == Mutex{}
+ensures m.LockP() && m.LockInv() == inv
+decreases
+func (m *Mutex) SetInv(ghost inv pred())
+
+ghost
+trusted
+decreases
+pure func IgnoreBlockingForTermination() bool
+
+trusted
+requires acc(m.LockP(), _)
+ensures  m.LockP() && m.UnlockP() && m.LockInv()()
+decreases _ if IgnoreBlockingForTermination()
+func (m *Mutex) Lock()
+
+trusted
+requires acc(m.LockP(), _) && m.UnlockP() && m.LockInv()()
+ensures m.LockP()
+decreases _
+func (m *Mutex) Unlock()

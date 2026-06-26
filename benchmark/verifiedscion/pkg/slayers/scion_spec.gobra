@@ -1,0 +1,819 @@
+// Copyright 2022 ETH Zurich
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// +gobra
+
+package slayers
+
+import (
+	"net"
+	"github.com/google/gopacket"
+
+	"github.com/scionproto/scion/pkg/addr"
+	"github.com/scionproto/scion/pkg/slayers/path"
+	"github.com/scionproto/scion/pkg/slayers/path/empty"
+	"github.com/scionproto/scion/pkg/slayers/path/epic"
+	"github.com/scionproto/scion/pkg/slayers/path/onehop"
+	"github.com/scionproto/scion/pkg/slayers/path/scion"
+
+	. "verification/utils/definitions"
+	sl "verification/utils/slices"
+	"verification/io"
+	"encoding/binary"
+	"verification/utils/seqs"
+)
+
+pred PathPoolMem(pathPool []path.Path, pathPoolRaw path.Path) {
+	// non-initialized path pool:
+	(pathPool == nil ==> pathPoolRaw == nil) &&
+	// initialized path pool:
+	(pathPool != nil ==> (
+		len(pathPool) == 4 &&
+		// empty
+		acc(&pathPool[empty.PathType])  &&
+		pathPool[empty.PathType] != nil &&
+		typeOf(pathPool[empty.PathType]) == type[empty.Path] &&
+		// onehop
+		acc(&pathPool[onehop.PathType])  &&
+		pathPool[onehop.PathType] != nil &&
+		typeOf(pathPool[onehop.PathType]) == type[*onehop.Path] &&
+		pathPool[onehop.PathType].NonInitMem() &&
+		// scion
+		acc(&pathPool[scion.PathType])  &&
+		pathPool[scion.PathType] != nil &&
+		typeOf(pathPool[scion.PathType]) == type[*scion.Raw] &&
+		pathPool[scion.PathType].NonInitMem() &&
+		// epic
+		acc(&pathPool[epic.PathType])  &&
+		pathPool[epic.PathType] != nil &&
+		typeOf(pathPool[epic.PathType]) == type[*epic.Path] &&
+		pathPool[epic.PathType].NonInitMem() &&
+		// raw path
+		pathPoolRaw != nil &&
+		pathPoolRaw.NonInitMem()))
+}
+
+// Captures the same obligations as PathPoolMem. Initially, I tried using a magic wand
+// but they cause loads of additional problems (e.g., storing in a predicate is not possible)
+pred PathPoolMemExceptOne(pathPool []path.Path, pathPoolRaw path.Path, pathType path.Type) {
+	pathPool != nil    &&
+	len(pathPool) == 4 &&
+	// entry per path type
+	// empty
+	(acc(&pathPool[empty.PathType]) &&
+	pathPool[empty.PathType] != nil &&
+	typeOf(pathPool[empty.PathType]) == type[empty.Path]) &&
+	// (pathType != empty.PathType ==> pathPool[empty.PathType].NonInitMem()) &&
+	// onehop
+	acc(&pathPool[onehop.PathType])  &&
+	pathPool[onehop.PathType] != nil &&
+	typeOf(pathPool[onehop.PathType]) == type[*onehop.Path] &&
+	(pathType != onehop.PathType ==> pathPool[onehop.PathType].NonInitMem()) &&
+	// scion
+	acc(&pathPool[scion.PathType])  &&
+	pathPool[scion.PathType] != nil &&
+	typeOf(pathPool[scion.PathType]) == type[*scion.Raw] &&
+	(pathType != scion.PathType ==> pathPool[scion.PathType].NonInitMem()) &&
+	// epic
+	acc(&pathPool[epic.PathType])  &&
+	pathPool[epic.PathType] != nil &&
+	typeOf(pathPool[epic.PathType]) == type[*epic.Path] &&
+	(pathType != epic.PathType ==> pathPool[epic.PathType].NonInitMem()) &&
+	// raw path
+	pathPoolRaw != nil &&
+	(pathType < len(pathPool) ==> pathPoolRaw.NonInitMem())
+}
+
+ghost
+requires acc(&s.pathPool)
+decreases
+pure func (s *SCION) pathPoolInitialized() bool {
+	return s.pathPool != nil
+}
+
+ghost
+requires s.NonInitMem()
+decreases
+pure func (s *SCION) PathPoolInitializedNonInitMem() bool {
+	return unfolding s.NonInitMem() in
+		s.pathPool != nil
+}
+
+ghost
+requires 0 <= pathType && pathType < path.MaxPathType
+requires acc(&s.pathPool) && acc(&s.pathPoolRaw)
+requires s.pathPool != nil
+requires PathPoolMemExceptOne(s.pathPool, s.pathPoolRaw, pathType)
+decreases
+pure func (s *SCION) getPathPure(pathType path.Type) path.Path {
+	return int(pathType) < len(s.pathPool)?
+		(unfolding PathPoolMemExceptOne(s.pathPool, s.pathPoolRaw, pathType) in s.pathPool[pathType]) :
+		s.pathPoolRaw
+}
+
+pred (s *SCION) NonInitMem() {
+	acc(&s.Version) &&
+	acc(&s.TrafficClass) &&
+	acc(&s.FlowID) &&
+	acc(&s.NextHdr) &&
+	acc(&s.HdrLen) &&
+	acc(&s.PayloadLen) &&
+	acc(&s.PathType) &&
+	acc(&s.DstAddrType) &&
+	acc(&s.SrcAddrType) &&
+	acc(&s.DstIA) &&
+	acc(&s.SrcIA) &&
+	acc(&s.RawDstAddr) &&
+	acc(&s.RawSrcAddr) &&
+	acc(&s.Path) &&
+	acc(&s.BaseLayer) &&
+	// path pool properties
+	acc(&s.pathPool) &&
+	acc(&s.pathPoolRaw) &&
+	PathPoolMem(s.pathPool, s.pathPoolRaw)
+}
+
+// TODO: simplify the body of the predicate when let expressions
+//       support predicates
+pred (s *SCION) Mem(ubuf []byte) {
+	acc(&s.Version) &&
+	acc(&s.TrafficClass) &&
+	acc(&s.FlowID) &&
+	acc(&s.NextHdr) &&
+	acc(&s.HdrLen) &&
+	acc(&s.PayloadLen) &&
+	acc(&s.PathType) &&
+	acc(&s.DstAddrType, HalfPerm) && s.DstAddrType.Has3Bits() &&
+	acc(&s.SrcAddrType, HalfPerm) && s.SrcAddrType.Has3Bits() &&
+	// len of ubuf:
+	0 <= s.HdrLen &&
+	0 <= CmnHdrLen + s.AddrHdrLenSpecInternal() &&
+	s.HdrLen * LineLen <= len(ubuf) &&
+	CmnHdrLen + s.AddrHdrLenSpecInternal() <= s.HdrLen * LineLen &&
+	// end of len of ubuf
+	acc(&s.Path) &&
+	s.Path != nil &&
+	s.Path.Mem(ubuf[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen]) &&
+	acc(&s.BaseLayer) &&
+	// base layer fields:
+	s.Contents === ubuf[:s.HdrLen*LineLen] &&
+	s.Payload  === ubuf[s.HdrLen*LineLen:] &&
+	// end of base layer fields
+	CmnHdrLen <= len(ubuf) &&
+	s.HeaderMem(ubuf[CmnHdrLen:]) &&
+	// path pool
+	0 <= s.PathType && s.PathType < path.MaxPathType &&
+	acc(&s.pathPool) &&
+	acc(&s.pathPoolRaw) &&
+	(!s.pathPoolInitialized() ==> PathPoolMem(s.pathPool, s.pathPoolRaw)) &&
+	(s.pathPoolInitialized() ==> (s.pathPool != nil && s.pathPoolRaw != nil &&
+		PathPoolMemExceptOne(s.pathPool, s.pathPoolRaw, s.PathType) && s.Path === s.getPathPure(s.PathType))) &&
+	// end of path pool
+	// helpful facts for other methods:
+	// - for router::updateScionLayer:
+	(typeOf(s.Path) == type[*onehop.Path] ==>
+		s.ValidSizeOhpUbOpenInv(ubuf))
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) ValidPathMetaData(ghost ub []byte) bool {
+	return unfolding s.Mem(ub) in
+		let ubPath := s.UBPath(ub) in
+		(typeOf(s.Path) == type[*scion.Raw] ==>
+			s.Path.(*scion.Raw).GetBase(ubPath).Valid()) &&
+		(typeOf(s.Path) == type[*epic.Path] ==>
+			s.Path.(*epic.Path).GetBase(ubPath).Valid())
+}
+
+// TODO: simplify the body of the predicate when let expressions
+//       support predicates
+pred (s *SCION) HeaderMem(ubuf []byte) {
+	acc(&s.DstIA) &&
+	acc(&s.SrcIA) &&
+	acc(&s.DstAddrType, HalfPerm) && s.DstAddrType.Has3Bits() &&
+	acc(&s.SrcAddrType, HalfPerm) && s.SrcAddrType.Has3Bits() &&
+	s.AddrHdrLenSpecInternal() <= len(ubuf) &&
+	// helper facts to deal with incompletnesses when establising the bounds of s.RawDstAddr and s.RawSrcAddr
+	s.AddrHdrLenSpecInternal() <= len(ubuf) &&
+	0 < s.DstAddrType.Length() && 0 < s.SrcAddrType.Length() &&
+	0 < 2*addr.IABytes &&
+	2*addr.IABytes < 2*addr.IABytes+s.DstAddrType.Length() &&
+	2*addr.IABytes+s.DstAddrType.Length() < 2*addr.IABytes+s.DstAddrType.Length()+s.SrcAddrType.Length() &&
+	2*addr.IABytes+s.DstAddrType.Length()+s.SrcAddrType.Length() <= len(ubuf) &&
+	// end of helper facts to deal with incompletnesses when establising the bounds of s.RawDstAddr and s.RawSrcAddr
+	acc(&s.RawDstAddr) && acc(&s.RawSrcAddr) &&
+	// RawDstAddr & RawSrcAddr locations. The memory for these is kept
+	// outside of HeaderMem, together with access to the entire slice.
+	s.RawDstAddr === ubuf[2*addr.IABytes:2*addr.IABytes+s.DstAddrType.Length()] &&
+	s.RawSrcAddr === ubuf[2*addr.IABytes+s.DstAddrType.Length():2*addr.IABytes+s.DstAddrType.Length()+s.SrcAddrType.Length()]
+}
+
+ghost
+requires s.Mem(ub)
+ensures  s.NonInitMem()
+decreases
+func (s *SCION) DowngradePerm(ghost ub []byte) {
+	unfold s.Mem(ub)
+	unfold s.HeaderMem(ub[CmnHdrLen:])
+	s.Path.DowngradePerm(ub[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen])
+	s.PathPoolMemExchange(s.PathType, s.Path)
+	fold s.NonInitMem()
+}
+
+pred (s *SCION) ChecksumMem() {
+	acc(&s.RawSrcAddr) && acc(&s.RawDstAddr) &&
+	len(s.RawSrcAddr) % 2 == 0 && len(s.RawDstAddr) % 2 == 0 &&
+	acc(&s.SrcIA) && acc(&s.DstIA) &&
+	sl.Bytes(s.RawSrcAddr, 0, len(s.RawSrcAddr)) &&
+	sl.Bytes(s.RawDstAddr, 0, len(s.RawDstAddr))
+}
+
+pred (b *BaseLayer) Mem(ghost ub []byte, ghost breakPoint int) {
+	0 <= breakPoint && breakPoint <= len(ub) &&
+	acc(b) &&
+	b.Contents === ub[:breakPoint] &&
+	b.Payload  === ub[breakPoint:]
+}
+
+ghost
+requires acc(s.Mem(ub), R15)
+ensures  acc(s, R16)
+ensures  s.DstAddrType == T4Svc ==> len(s.RawDstAddr) >= addr.HostLenSVC
+ensures  0 <= start && start <= end && end <= len(ub)
+ensures  s.RawDstAddr === ub[start:end]
+ensures  acc(s, R16) --* acc(s.Mem(ub), R15)
+decreases
+func (s *SCION) ExtractAcc(ghost ub []byte) (start, end int) {
+	unfold acc(s.Mem(ub), R16)
+	unfold acc(s.HeaderMem(ub[CmnHdrLen:]), R16)
+	start = CmnHdrLen+2*addr.IABytes
+	end = CmnHdrLen+2*addr.IABytes+s.DstAddrType.Length()
+	assert s.RawDstAddr === ub[start:end]
+	package acc(s, R16) --* acc(s.Mem(ub), R15) {
+		unfold acc(s.Mem(ub), R16)
+		unfold acc(s.HeaderMem(ub[CmnHdrLen:]), R16)
+		fold acc(s.HeaderMem(ub[CmnHdrLen:]), R15)
+		fold acc(s.Mem(ub), R15)
+	}
+	return start, end
+}
+
+ghost
+decreases
+pure func (a AddrType) Has3Bits() (res bool) {
+	return 0 <= a && a <= 7
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) UBPath(ub []byte) []byte {
+	return unfolding s.Mem(ub) in
+		ub[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen]
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) UBScionPath(ub []byte) []byte {
+	return unfolding s.Mem(ub) in
+		let ubPath := ub[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen] in
+		typeOf(s.Path) == *epic.Path ?
+			unfolding s.Path.Mem(ubPath) in ubPath[epic.MetadataLen:] :
+			ubPath
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) PathStartIdx(ub []byte) int {
+	return unfolding s.Mem(ub) in
+		CmnHdrLen+s.AddrHdrLenSpecInternal()
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) PathEndIdx(ub []byte) int {
+	return unfolding s.Mem(ub) in
+		int(s.HdrLen*LineLen)
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) PathScionStartIdx(ub []byte) int {
+	return unfolding s.Mem(ub) in
+		let offset := CmnHdrLen+s.AddrHdrLenSpecInternal() in
+		typeOf(s.Path) == *epic.Path ?
+			offset + epic.MetadataLen :
+			offset
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) PathScionEndIdx(ub []byte) int {
+	return unfolding s.Mem(ub) in
+		int(s.HdrLen*LineLen)
+}
+
+ghost
+requires  0 < p
+preserves acc(s.Mem(ub), p)
+ensures   let start := s.PathStartIdx(ub) in
+	let end := s.PathEndIdx(ub) in
+	0 <= start && start <= end && end <= len(ub)
+decreases
+func LemmaPathIdxStartEnd(s *SCION, ub []byte, p perm) {
+	unfold acc(s.Mem(ub), p)
+	fold acc(s.Mem(ub), p)
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) GetPath(ub []byte) path.Path {
+	return unfolding s.Mem(ub) in
+		s.Path
+}
+
+ghost
+opaque
+requires s.Mem(ub)
+requires sl.Bytes(ub, 0, length)
+requires CmnHdrLen <= length
+decreases
+pure func (s *SCION) ValidHeaderOffset(ub []byte, length int) bool {
+	return GetAddressOffsetWithinLength(ub, length) == s.PathStartIdx(ub) &&
+		GetLengthWithinLength(ub,length) == s.PathEndIdx(ub)
+}
+
+ghost
+requires acc(s.Mem(ub), R56)
+requires acc(sl.Bytes(ub, 0, len(ub)), R55)
+requires acc(sl.Bytes(ub, 0, length), R55)
+requires CmnHdrLen <= length && length <= len(ub)
+requires s.ValidHeaderOffset(ub, len(ub))
+ensures  acc(s.Mem(ub), R56)
+ensures  acc(sl.Bytes(ub, 0, len(ub)), R55)
+ensures  acc(sl.Bytes(ub, 0, length), R55)
+ensures  s.ValidHeaderOffset(ub, length)
+decreases
+func (s *SCION) ValidHeaderOffsetToSubSliceLemma(ub []byte, length int) {
+	reveal s.ValidHeaderOffset(ub, len(ub))
+	unfold acc(sl.Bytes(ub, 0, len(ub)), R56)
+	unfold acc(sl.Bytes(ub, 0, length), R56)
+	assert reveal s.ValidHeaderOffset(ub, length)
+	fold acc(sl.Bytes(ub, 0, len(ub)), R56)
+	fold acc(sl.Bytes(ub, 0, length), R56)
+}
+
+ghost
+requires acc(s.Mem(ub), R56)
+requires acc(sl.Bytes(ub, 0, len(ub)), R55)
+requires acc(sl.Bytes(ub, 0, length), R55)
+requires CmnHdrLen <= length && length <= len(ub)
+requires s.ValidHeaderOffset(ub, length)
+ensures  acc(s.Mem(ub), R56)
+ensures  acc(sl.Bytes(ub, 0, len(ub)), R55)
+ensures  acc(sl.Bytes(ub, 0, length), R55)
+ensures  s.ValidHeaderOffset(ub, len(ub))
+decreases
+func (s *SCION) ValidHeaderOffsetFromSubSliceLemma(ub []byte, length int) {
+	reveal s.ValidHeaderOffset(ub, len(ub))
+	unfold acc(sl.Bytes(ub, 0, len(ub)), R56)
+	unfold acc(sl.Bytes(ub, 0, length), R56)
+	assert reveal s.ValidHeaderOffset(ub, length)
+	fold acc(sl.Bytes(ub, 0, len(ub)), R56)
+	fold acc(sl.Bytes(ub, 0, length), R56)
+}
+
+ghost
+opaque
+requires s.Mem(ub)
+requires sl.Bytes(ub, 0, len(ub))
+decreases
+pure func (s *SCION) EqAbsHeader(ub []byte) bool {
+	return unfolding s.Mem(ub) in
+		// the '_' in the identifier below is now necessary to avoid
+		// parsing errors (since the SIF PR in Gobra, low is a keyword).
+		let low_ := CmnHdrLen+s.AddrHdrLenSpecInternal() in
+		let high := s.HdrLen*LineLen  in
+		GetAddressOffset(ub) == low_  &&
+		GetLength(ub) == int(high)    &&
+		// Might be worth introducing EqAbsHeader as an interface method on Path
+		// to avoid doing these casts, especially when we add support for EPIC.
+		typeOf(s.Path) == (*scion.Raw) &&
+		unfolding s.Path.Mem(ub[low_:high]) in
+		unfolding sl.Bytes(ub, 0, len(ub))  in
+		let _ := Asserting(forall k int :: {&ub[low_:high][k]} 0 <= k && k < high ==>
+			&ub[low_:high][k] == &ub[low_ + k]) in
+		let _ := Asserting(forall k int :: {&ub[low_:high][:scion.MetaLen][k]} 0 <= k && k < scion.MetaLen ==>
+			&ub[low_:high][:scion.MetaLen][k] == &ub[low_:high][k]) in
+		let metaHdr := scion.DecodedFrom(binary.BigEndian.Uint32(ub[low_:high][:scion.MetaLen])) in
+		let seg1 := int(metaHdr.SegLen[0]) in
+		let seg2 := int(metaHdr.SegLen[1]) in
+		let seg3 := int(metaHdr.SegLen[2]) in
+		let segs := io.CombineSegLens(seg1, seg2, seg3) in
+		s.Path.(*scion.Raw).Base.GetBase() ==
+			scion.Base{metaHdr, segs.NumInfoFields(), segs.TotalHops()}
+}
+
+// Describes a SCION packet that was successfully decoded by `DecodeFromBytes`.
+ghost
+opaque
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) ValidScionInitSpec(ub []byte) bool {
+	return unfolding s.Mem(ub)                           in
+		// the '_' in the identifier below is now necessary to avoid
+		// parsing errors (since the SIF PR in Gobra, low is a keyword).
+		let low_ := CmnHdrLen+s.AddrHdrLenSpecInternal() in
+		let high := s.HdrLen*LineLen                     in
+		typeOf(s.Path) == (*scion.Raw) &&
+		s.Path.(*scion.Raw).GetBase(ub[low_:high]).WeaklyValid()
+}
+
+// Checks if the common path header is valid in the serialized scion packet.
+ghost
+opaque
+requires sl.Bytes(raw, 0, len(raw))
+decreases
+pure func ValidPktMetaHdr(raw []byte) bool {
+	return CmnHdrLen <= len(raw) &&
+		let start  := GetAddressOffset(raw) in
+		let end    := start+scion.MetaLen   in
+		0 <= start && end <= len(raw) &&
+		let rawHdr := raw[start:end] in
+		let length := GetLength(raw) in
+		length <= len(raw) &&
+		unfolding sl.Bytes(raw, 0, len(raw))       in
+		let _ := Asserting(forall k int :: {&rawHdr[k]} 0 <= k && k < scion.MetaLen ==> &rawHdr[k] == &raw[start + k]) in
+		let hdr := binary.BigEndian.Uint32(rawHdr) in
+		let metaHdr := scion.DecodedFrom(hdr)      in
+		let seg1 := int(metaHdr.SegLen[0])         in
+		let seg2 := int(metaHdr.SegLen[1])         in
+		let seg3 := int(metaHdr.SegLen[2])         in
+		let segs := io.CombineSegLens(seg1, seg2, seg3) in
+		let base := scion.Base{metaHdr, segs.NumInfoFields(), segs.TotalHops()} in
+		0 < metaHdr.SegLen[0] &&
+		base.Valid() &&
+		scion.PktLen(segs, start + scion.MetaLen) <= length
+}
+
+ghost
+opaque
+requires sl.Bytes(raw, 0, len(raw))
+decreases
+pure func IsSupportedPkt(raw []byte) bool {
+	return CmnHdrLen <= len(raw) &&
+		let pathType := path.Type(GetPathType(raw))     in
+		let nextHdr  := L4ProtocolType(GetNextHdr(raw)) in
+		pathType == scion.PathType &&
+		nextHdr != L4SCMP
+}
+
+ghost
+opaque
+decreases
+pure func IsSupportedRawPkt(raw seq[byte]) bool {
+	return CmnHdrLen <= len(raw) &&
+		let pathType := path.Type(raw[8])     in
+		let nextHdr  := L4ProtocolType(raw[4]) in
+		pathType == scion.PathType &&
+		nextHdr != L4SCMP
+}
+
+ghost
+requires  CmnHdrLen <= idx && idx <= len(raw)
+preserves acc(sl.Bytes(raw, 0, len(raw)), R55)
+preserves acc(sl.Bytes(raw[:idx], 0, idx), R55)
+ensures   IsSupportedPkt(raw) == IsSupportedPkt(raw[:idx])
+decreases
+func IsSupportedPktSubslice(raw []byte, idx int) {
+	unfold acc(sl.Bytes(raw, 0, len(raw)), R56)
+	unfold acc(sl.Bytes(raw[:idx], 0, idx), R56)
+	reveal IsSupportedPkt(raw)
+	reveal IsSupportedPkt(raw[:idx])
+	fold acc(sl.Bytes(raw, 0, len(raw)), R56)
+	fold acc(sl.Bytes(raw[:idx], 0, idx), R56)
+}
+
+ghost
+preserves acc(s.Mem(ub), R55)
+preserves acc(sl.Bytes(ub, 0, len(ub)), R55)
+preserves acc(sl.Bytes(buffer, 0, len(buffer)), R55)
+preserves s.EqPathType(ub)
+preserves s.EqPathTypeWithBuffer(ub, buffer)
+ensures   IsSupportedPkt(ub) == IsSupportedPkt(buffer)
+decreases
+func (s *SCION) IsSupportedPktLemma(ub []byte, buffer []byte) {
+	reveal s.EqPathType(ub)
+	reveal s.EqPathTypeWithBuffer(ub, buffer)
+	reveal IsSupportedPkt(ub)
+	reveal IsSupportedPkt(buffer)
+}
+
+ghost
+requires sl.Bytes(ub, 0, len(ub))
+requires CmnHdrLen <= len(ub)
+decreases
+pure func GetAddressOffset(ub []byte) int {
+	return GetAddressOffsetWithinLength(ub, len(ub))
+}
+
+ghost
+requires sl.Bytes(ub, 0, length)
+requires CmnHdrLen <= length
+decreases
+pure func GetAddressOffsetWithinLength(ub []byte, length int) int {
+	return unfolding sl.Bytes(ub, 0, length)                  in
+		let dstAddrLen := AddrType(ub[9] >> 4 & 0x7).Length() in
+		let srcAddrLen := AddrType(ub[9] & 0x7).Length()      in
+		CmnHdrLen + 2*addr.IABytes + dstAddrLen + srcAddrLen
+}
+
+ghost
+requires sl.Bytes(ub, 0, len(ub))
+requires CmnHdrLen <= len(ub)
+decreases
+pure func GetLength(ub []byte) int {
+	return GetLengthWithinLength(ub, len(ub))
+}
+
+ghost
+requires sl.Bytes(ub, 0, length)
+requires CmnHdrLen <= length
+decreases
+pure func GetLengthWithinLength(ub []byte, length int) int {
+	return unfolding sl.Bytes(ub, 0, length) in
+		int(ub[5]) * LineLen
+}
+
+ghost
+requires sl.Bytes(ub, 0, len(ub))
+requires CmnHdrLen <= len(ub)
+decreases
+pure func GetPathType(ub []byte) int {
+	return unfolding sl.Bytes(ub, 0, len(ub)) in
+		int(ub[8])
+}
+
+ghost
+requires sl.Bytes(ub, 0, len(ub))
+requires CmnHdrLen <= len(ub)
+decreases
+pure func GetNextHdr(ub []byte) int {
+	return unfolding sl.Bytes(ub, 0, len(ub)) in
+		int(ub[4])
+}
+
+ghost
+opaque
+requires s.Mem(ub)
+requires sl.Bytes(ub, 0, len(ub))
+decreases
+pure func (s *SCION) EqPathType(ub []byte) bool {
+	return reveal s.EqPathTypeWithBuffer(ub, ub)
+}
+
+ghost
+opaque
+requires s.Mem(ub)
+requires sl.Bytes(buffer, 0, len(buffer))
+decreases
+pure func (s *SCION) EqPathTypeWithBuffer(ub []byte, buffer []byte) bool {
+	return unfolding s.Mem(ub) in
+		CmnHdrLen <= len(buffer) &&
+		path.Type(GetPathType(buffer)) == s.PathType &&
+		L4ProtocolType(GetNextHdr(buffer)) == s.NextHdr
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) GetScionPath(ub []byte) path.Path {
+	return unfolding s.Mem(ub) in (
+		typeOf(s.Path) == *epic.Path ?
+			(let ubPath := ub[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen] in
+				unfolding s.Path.Mem(ubPath) in
+				(path.Path)(s.Path.(*epic.Path).ScionPath)) :
+			s.Path)
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) GetPayloadLen(ghost ub []byte) uint16 {
+	return unfolding s.Mem(ub) in
+		s.PayloadLen
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) GetPayload(ghost ub []byte) []byte {
+	return unfolding s.Mem(ub) in
+		s.Payload
+}
+
+ghost
+requires acc(&s.DstAddrType) && acc(&s.SrcAddrType)
+requires s.DstAddrType.Has3Bits() && s.SrcAddrType.Has3Bits()
+ensures  0 <= res
+decreases
+pure func (s *SCION) AddrHdrLenSpecInternal() (res int) {
+	return 2*addr.IABytes + s.DstAddrType.Length() + s.SrcAddrType.Length()
+}
+
+ghost
+requires s.Mem(ubuf)
+ensures  0 <= res
+decreases
+pure func (s *SCION) AddrHdrLenSpec(ubuf []byte) (res int) {
+	return unfolding s.Mem(ubuf) in
+		unfolding s.HeaderMem(ubuf[CmnHdrLen:]) in
+		2*addr.IABytes + s.DstAddrType.Length() + s.SrcAddrType.Length()
+}
+
+// Morally ghost
+requires acc(p)
+ensures  p.NonInitMem()
+ensures  r == p
+decreases
+func FoldOneHopMem(p *onehop.Path) (r *onehop.Path) {
+	fold p.NonInitMem()
+	return p
+}
+
+// Morally ghost
+requires acc(p)
+ensures  p.NonInitMem()
+ensures  r == p
+decreases
+func FoldRawMem(p *scion.Raw) (r *scion.Raw) {
+	fold p.Base.NonInitMem()
+	fold p.NonInitMem()
+	return p
+}
+
+// Morally ghost
+requires acc(p)
+ensures  p.NonInitMem()
+ensures  r == p
+decreases
+func FoldEpicMem(p *epic.Path) (r *epic.Path) {
+	fold p.NonInitMem()
+	return p
+}
+
+requires false
+func (s *SCION) LayerContents() (res []byte) {
+	res = s.Contents
+	return res
+}
+
+ghost
+requires  0 <= pathType && pathType < path.MaxPathType
+requires  acc(&s.pathPool, R20) && acc(&s.pathPoolRaw, R20)
+requires  s.pathPoolInitialized() ==> (
+	p.NonInitMem() &&
+	PathPoolMemExceptOne(s.pathPool, s.pathPoolRaw, pathType) &&
+	p === s.getPathPure(pathType))
+requires !s.pathPoolInitialized() ==> PathPoolMem(s.pathPool, s.pathPoolRaw)
+ensures  acc(&s.pathPool, R20) && acc(&s.pathPoolRaw, R20)
+ensures  PathPoolMem(s.pathPool, s.pathPoolRaw)
+decreases
+func (s *SCION) PathPoolMemExchange(pathType path.Type, p path.Path) {
+	if s.pathPoolInitialized() {
+		unfold PathPoolMemExceptOne(s.pathPool, s.pathPoolRaw, pathType)
+		fold   PathPoolMem(s.pathPool, s.pathPoolRaw)
+	}
+}
+
+// gopacket subtyping
+*SCION implements gopacket.Layer
+*SCION implements gopacket.NetworkLayer
+*SCION implements gopacket.SerializableLayer
+*SCION implements gopacket.DecodingLayer
+
+ghost
+requires typeOf(a) == *net.IPAddr
+requires acc(&a.(*net.IPAddr).IP, _)
+requires forall i int :: { &a.(*net.IPAddr).IP[i] } 0 <= i && i < len(a.(*net.IPAddr).IP) ==>
+	acc(&a.(*net.IPAddr).IP[i])
+requires len(a.(*net.IPAddr).IP) == net.IPv6len
+decreases
+pure func isConvertibleToIPv4(a net.Addr) bool {
+	return net.isZeros(a.(*net.IPAddr).IP[0:10]) &&
+		a.(*net.IPAddr).IP[10] == 255 &&
+		a.(*net.IPAddr).IP[11] == 255
+}
+
+ghost
+requires typeOf(a) == *net.IPAddr
+requires acc(&a.(*net.IPAddr).IP)
+decreases
+pure func isIPv6(a net.Addr) bool {
+	return len(a.(*net.IPAddr).IP) == net.IPv6len
+}
+
+ghost
+requires typeOf(a) == *net.IPAddr
+requires acc(&a.(*net.IPAddr).IP)
+decreases
+pure func isIPv4(a net.Addr) bool {
+	return len(a.(*net.IPAddr).IP) == net.IPv4len
+}
+
+ghost
+decreases
+pure func isIP(a net.Addr) bool {
+	return typeOf(a) == *net.IPAddr
+}
+
+ghost
+decreases
+pure func isHostSVC(a net.Addr) bool {
+	return typeOf(a) == addr.HostSVC
+}
+
+// invariant established by initialization
+ghost
+ensures acc(path.PkgMem(), _)
+decreases
+func EstablishPathPkgMem() {
+	openDupPkgInv
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) HasOneHopPath(ghost ub []byte) bool {
+	return unfolding s.Mem(ub) in
+		typeOf(s.Path) == type[*onehop.Path]
+}
+
+ghost
+requires acc(&s.DstAddrType) &&
+	acc(&s.SrcAddrType)      &&
+	acc(&s.HdrLen)           &&
+	acc(&s.Path)
+requires s.DstAddrType.Has3Bits() && s.SrcAddrType.Has3Bits()
+requires 0 <= CmnHdrLen+s.AddrHdrLenSpecInternal() &&
+	CmnHdrLen+s.AddrHdrLenSpecInternal() <= s.HdrLen*LineLen &&
+	s.HdrLen*LineLen <= len(ub)
+requires s.Path != nil && s.Path.Mem(ub[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen])
+decreases
+pure func (s *SCION) MinSizeOfUbufWithOneHopOpenInv(ub []byte) int {
+	return let pathSlice := ub[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen] in
+		let pathLen := s.Path.LenSpec(pathSlice) in
+		CmnHdrLen + s.AddrHdrLenSpecInternal() + pathLen
+}
+
+ghost
+requires s.Mem(ub)
+decreases
+pure func (s *SCION) MinSizeOfUbufWithOneHop(ub []byte) int {
+	return unfolding s.Mem(ub) in
+		s.MinSizeOfUbufWithOneHopOpenInv(ub)
+}
+
+ghost
+requires acc(&s.DstAddrType) &&
+	acc(&s.SrcAddrType)      &&
+	acc(&s.HdrLen)           &&
+	acc(&s.Path)
+requires s.DstAddrType.Has3Bits() && s.SrcAddrType.Has3Bits()
+requires 0 <= CmnHdrLen+s.AddrHdrLenSpecInternal() &&
+	CmnHdrLen+s.AddrHdrLenSpecInternal() <= s.HdrLen*LineLen &&
+	s.HdrLen*LineLen <= len(ub)
+requires s.Path != nil && s.Path.Mem(ub[CmnHdrLen+s.AddrHdrLenSpecInternal() : s.HdrLen*LineLen])
+decreases
+pure func (s *SCION) ValidSizeOhpUbOpenInv(ub []byte) (b bool) {
+	return s.MinSizeOfUbufWithOneHopOpenInv(ub) <= len(ub)
+}
+
+ghost
+requires s.Mem(ub)
+requires s.HasOneHopPath(ub)
+ensures  b
+decreases
+pure func (s *SCION) ValidSizeOhpUb(ub []byte) (b bool) {
+	return unfolding s.Mem(ub) in
+		s.ValidSizeOhpUbOpenInv(ub)
+}

@@ -1,0 +1,22 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package pkg
+
+func example1(ghost s set[int]) (ghost b bool) {
+  b = 42 elem s
+}
+
+func example2() {
+  assert 2 elem set[int] { 1, 2, 3 }
+  assert !(2 elem set[int] { 1, 3 })
+  assert 2 elem set[int] { 2 } elem set[bool] { true }
+}
+
+func example3(ghost x int, ghost s set[int], ghost t set[int]) {
+  assert x elem s ==> x elem s union t
+  assert x elem s ==> x elem t ==> x elem s intersection t
+  assert x elem s ==> s subset t ==> x elem t
+  assert x elem s intersection t ==> x elem s && x elem t
+  assert x elem s union t ==> x elem s || x elem t
+}

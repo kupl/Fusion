@@ -1,0 +1,13 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+method foo(b: Int) returns (r: Int) {
+    //:: ExpectedOutput(typechecker.error)
+    b := foo(0)
+}
+
+method bar(r: Ref)
+{
+    //:: ExpectedOutput(typechecker.error)
+    r := new(*)
+}

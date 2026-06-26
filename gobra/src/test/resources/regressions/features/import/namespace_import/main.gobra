@@ -1,0 +1,36 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package main
+
+// ##(-I ./)
+import b "bar"
+
+// create a second type called Rectangle:
+type Rectangle struct {
+    Width, Height int
+}
+
+requires acc(&r.Width)
+ensures acc(&r.Width)
+ensures res == r.Width * r.Width
+ensures old(r.Width) == r.Width
+func (r *Rectangle) Area() (res int) {
+    // note that this is on purpose a wrong implementation to assert
+    // that the correct Rectangle type and method gets selected by Gobra
+    return r.Width * r.Width
+}
+
+func foo() {
+    r@ := b.Rectangle{Width: 2, Height: 5}
+    res0 := r.Area()
+    assert res0 == 10
+    res1 := (*(b.Rectangle)).Area(&r)
+    assert res1 == 10
+
+    r1@ := Rectangle{Width: 2, Height: 5}
+    res2 := r1.Area()
+    assert res2 == 4
+    res3 := (*(Rectangle)).Area(&r1)
+    assert res3 == 4
+}

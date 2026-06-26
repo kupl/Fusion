@@ -1,0 +1,15 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package main
+
+// ##(-I ./)
+import b "bar"
+
+func foo() {
+  b.bar()
+}
+
+func foo2() {
+  go b.bar()
+}

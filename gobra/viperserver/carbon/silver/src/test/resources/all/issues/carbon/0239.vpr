@@ -1,0 +1,18 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+field val : Int
+
+function bool2Ref(b: Bool) : Ref
+  decreases *
+  ensures result != null && bool2Ref(true) != bool2Ref(false) // injectivity - doesn't change the behaviour
+
+method m(x:Ref)
+  requires forall b:Bool :: acc(bool2Ref(b).val)
+  {
+     //:: ExpectedOutput(assignment.failed:insufficient.permission)
+     x.val := 42
+     //:: MissingOutput(assert.failed:assertion.false, /silicon/issue/34/)
+     //:: ExpectedOutput(assert.failed:assertion.false)
+     assert false
+  }

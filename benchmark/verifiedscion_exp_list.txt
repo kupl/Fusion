@@ -1,0 +1,173 @@
+==== host.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/addr/host.go \
+benchmark/verifiedscion/pkg/addr/host_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== extn.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/extn.go \
+benchmark/verifiedscion/pkg/slayers/extn_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/l4.go \
+benchmark/verifiedscion/pkg/slayers/scion.go \
+benchmark/verifiedscion/pkg/slayers/scion_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/layertypes_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== conn.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/private/underlay/conn/conn.go \
+benchmark/verifiedscion/private/underlay/conn/conn_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== scion.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/scion.go \
+benchmark/verifiedscion/pkg/slayers/scion_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/l4.go \
+benchmark/verifiedscion/pkg/slayers/layertypes_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== scmp_msg.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/scmp_msg.go \
+benchmark/verifiedscion/pkg/slayers/scmp_msg_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/l4.go \
+benchmark/verifiedscion/pkg/slayers/layertypes_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/scion.go \
+benchmark/verifiedscion/pkg/slayers/scion_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== path.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/path.go \
+benchmark/verifiedscion/pkg/slayers/path/path_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== base.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/scion/base.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/base_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/raw.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/raw_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/info_hop_setter_lemmas.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/decoded.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/decoded_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/widen-lemma.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== raw.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/scion/raw.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/raw_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/base.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/base_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/decoded.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/decoded_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/widen-lemma.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/info_hop_setter_lemmas.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== epic.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/epic/epic.go \
+benchmark/verifiedscion/pkg/slayers/path/epic/epic_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== hopfield.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/hopfield.go \
+benchmark/verifiedscion/pkg/slayers/path/hopfield_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/io_msgterm_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== scmp_typecode.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/scmp_typecode.go \
+benchmark/verifiedscion/pkg/slayers/scmp_typecode_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== scmp.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/scmp.go \
+benchmark/verifiedscion/pkg/slayers/scmp_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/scion.go \
+benchmark/verifiedscion/pkg/slayers/scion_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/l4.go \
+benchmark/verifiedscion/pkg/slayers/layertypes_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/scmp_typecode.go \
+benchmark/verifiedscion/pkg/slayers/scmp_typecode_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== infofield.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/infofield.go \
+benchmark/verifiedscion/pkg/slayers/path/infofield_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/hopfield.go \
+benchmark/verifiedscion/pkg/slayers/path/hopfield_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/io_msgterm_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== mac.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/mac.go \
+benchmark/verifiedscion/pkg/slayers/path/infofield.go \
+benchmark/verifiedscion/pkg/slayers/path/infofield_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/hopfield.go \
+benchmark/verifiedscion/pkg/slayers/path/hopfield_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/io_msgterm_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== empty.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/empty/empty.go \
+benchmark/verifiedscion/pkg/slayers/path/empty/empty_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== onehop.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/onehop/onehop.go \
+benchmark/verifiedscion/pkg/slayers/path/onehop/onehop_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== decoded.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/pkg/slayers/path/scion/decoded.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/decoded_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/widen-lemma.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/base.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/base_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/raw.go \
+benchmark/verifiedscion/pkg/slayers/path/scion/raw_spec.gobra \
+benchmark/verifiedscion/pkg/slayers/path/scion/info_hop_setter_lemmas.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== linktype.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/private/topology/linktype.go \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########
+
+==== svc.go ====
+java -Xss1g -Xmx4g -jar gobra/target/scala-2.13/gobra.jar -i \
+benchmark/verifiedscion/router/svc.go \
+benchmark/verifiedscion/router/svc_spec.gobra \
+-I benchmark/verifiedscion benchmark/verifiedscion/verification/dependencies --onlyFilesWithHeader -m github.com/scionproto/scion --experimentalFriendClauses
+########

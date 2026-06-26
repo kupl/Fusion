@@ -1,0 +1,15 @@
+.git
+.metals
+.vscode
+.DS_Store
+
+gobra/target
+gobra/project/target
+
+src/__pycache__
+script/__pycache__
+
+output/experiments
+
+output/sanitized_experiments/*
+!output/sanitized_experiments/*.tar.gz

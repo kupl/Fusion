@@ -1,0 +1,9 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package pkg
+
+func example1(ghost x int, ghost xs seq[int]) {
+  assert x elem set(xs) ==> x elem mset(xs)
+  assert x elem mset(xs) ==> x elem set(xs)
+}

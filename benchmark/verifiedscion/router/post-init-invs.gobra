@@ -1,0 +1,154 @@
+// Copyright 2022 ETH Zurich
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// +gobra
+
+// This file is used for declaring assumptions which we cannot currenlty do
+// away with, due to Gobra's incompletnesses or lack of support for
+// specific features, like post-initialization invariants or because
+// Gobra does not currently infer that 'x' != nil if 'x.Mem()' holds,
+// where 'x' is of an interface type.
+
+package router
+
+import "github.com/scionproto/scion/verification/utils/errors"
+
+/**** Post-init invariants ****/
+
+ghost
+ensures unsupportedPathType.ErrorMem()
+decreases
+func establishMemUnsupportedPathType() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(unsupportedPathType)
+}
+
+ghost
+ensures malformedPath != nil
+ensures malformedPath.ErrorMem()
+decreases
+func establishMemMalformedPath() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(malformedPath)
+}
+
+ghost
+ensures alreadySet != nil
+ensures alreadySet.ErrorMem()
+decreases
+func establishAlreadySet() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(alreadySet)
+}
+
+ghost
+ensures unsupportedPathTypeNextHeader.ErrorMem()
+decreases
+func establishMemUnsupportedPathTypeNextHeader() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(unsupportedPathTypeNextHeader)
+}
+
+ghost
+ensures noBFDSessionConfigured.ErrorMem()
+decreases
+func establishMemNoBFDSessionConfigured() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(noBFDSessionConfigured)
+}
+
+ghost
+ensures noBFDSessionFound.ErrorMem()
+decreases
+func establishMemNoBFDSessionFound() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(noBFDSessionFound)
+}
+
+ghost
+ensures invalidSrcAddrForTransit.ErrorMem()
+decreases
+func establishInvalidSrcAddrForTransit() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(invalidSrcAddrForTransit)
+}
+
+ghost
+ensures noSVCBackend.ErrorMem()
+decreases
+func establishNoSVCBackend() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(noSVCBackend)
+}
+
+ghost
+ensures cannotRoute.ErrorMem()
+decreases
+func establishCannotRoute() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(cannotRoute)
+}
+
+ghost
+ensures invalidSrcIA.ErrorMem()
+decreases
+func establishInvalidSrcIA() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(invalidSrcIA)
+}
+
+ghost
+ensures invalidDstIA.ErrorMem()
+decreases
+func establishInvalidDstIA() {
+	openDupPkgInv
+	errors.DupErrorsCanBePromoted(invalidDstIA)
+}
+
+/**** End of post-init invariants ****/
+
+/**** scmpError ghost members ****/
+
+// Gobra currently runs into unexpected verification errors
+// when trying to prove the termination of these methods
+// ('IsDuplicableMem' and 'Duplicate').
+// https://github.com/viperproject/gobra/issues/702
+
+ghost
+trusted
+requires err.ErrorMem()
+decreases err.ErrorMem()
+pure func (err scmpError) IsDuplicableMem() bool {
+	return unfolding err.ErrorMem() in
+		err.Cause.IsDuplicableMem()
+}
+
+ghost
+trusted
+preserves err.ErrorMem()
+ensures   err.IsDuplicableMem() == old(err.IsDuplicableMem())
+ensures   err.IsDuplicableMem() ==> err.ErrorMem()
+decreases err.ErrorMem()
+func (err scmpError) Duplicate() {
+	if err.IsDuplicableMem() {
+		unfold err.ErrorMem()
+		assert err.Cause.IsDuplicableMem()
+		err.Cause.Duplicate()
+		assert err.Cause.ErrorMem() && err.Cause.ErrorMem()
+		fold err.ErrorMem()
+		fold err.ErrorMem()
+	}
+}
+
+/**** End of scmpError ghost members ****/

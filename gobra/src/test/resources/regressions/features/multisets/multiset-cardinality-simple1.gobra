@@ -1,0 +1,23 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package pkg
+
+func example1(ghost m mset[int]) (ghost n int) {
+	n = len(m)
+}
+
+func example2(ghost m1 mset[int], ghost m2 mset[int]) {
+  ghost n := len(m1 union m2)
+}
+
+func example3() {
+  assert len(mset[int] { 1, 2, 2 }) == 3
+  assert len(mset[int] { 1, 2, 2 }) == len(mset[int] { 2, 2, 3 });
+  assert len(mset[int] { 1, 2, 2 }) != len(set[int] { 1, 2, 2 });
+  assert len(mset[int] { 1, 2 } union mset[int] { 2, 3 }) == 4
+}
+
+ensures len(m1 union m2) == len(m1) + len(m2);
+func example4(ghost m1 mset[int], ghost m2 mset[int]) {
+}

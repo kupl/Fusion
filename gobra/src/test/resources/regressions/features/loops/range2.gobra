@@ -1,0 +1,51 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package pkg
+
+decreases
+func foo() {
+	x := []uint{1, 2, 3}
+	y := []uint{0, 0, 0}
+	z := []int{0, 0}
+	max := x[0]
+	invariant acc(x)
+	invariant acc(y)
+	invariant acc(z)
+	// this invariant is also automatically generated but
+	// only after the next one which causes the next one to fail
+	// in such a case, the user must provide it himself
+	invariant forall k int :: 0 <= k && k < i0 ==> max >= x[k]
+	decreases len(x) - i0
+	for z[1], y[2] = range x with i0 {
+		if y[2] > max {
+			max = y[2]
+		}
+	}
+	assert forall i int :: 0 <= i && i < len(x) ==> max >= x[i]
+}
+
+
+func foo2() {
+	x := []uint{1, 2, 3}
+	var i uint
+	var j int
+	invariant acc(x)
+	decreases len(x) - i0
+	for j, _ = range x with i0 {
+	}
+	invariant acc(x)
+	for _ = range x with _ {
+	}
+	invariant acc(x)
+	for _, i = range x {
+	}
+	invariant acc(x)
+	for j = range x with i0 {
+	}
+	invariant acc(x)
+	for _ = range x with i0 {
+		continue
+		break
+	}
+}

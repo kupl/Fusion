@@ -1,0 +1,19 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package pkg
+
+// property error: slice types are always incomparable using go equality (==), except for 'nil'
+//:: ExpectedOutput(type_error)
+requires s == t
+func foo(s []int, t []int) { 
+}
+
+// error: expected pure expression without permissions, but got []int { }
+pure
+decreases
+func f() []int {
+    // pure functions may NOT contain slice literals
+    //:: ExpectedOutput(type_error)
+    return []int{}
+}

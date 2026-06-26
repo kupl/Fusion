@@ -1,0 +1,19 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+function f(x: Int): Bool
+function g(x: Int): Bool
+
+method test0(n: Int)
+{
+    assume forall x: Int :: {f(x)} g(x)
+
+    assert g(n) // fails due to missing triggering
+}
+
+method test12(n: Int)
+{
+    assume forall x: Int :: {f(x)} g(x) // LA 27.11.22: removed `f(42)` as trigger expression because it does not contain the quantified variable
+
+    assert g(n) // fails due to missing triggering
+}

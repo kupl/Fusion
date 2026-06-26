@@ -1,0 +1,19 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package main
+
+// ##(-I ./)
+import b "bar"
+
+func foo() {
+    r@ := b.Rectangle{Width: 2, Height: 5}
+    fold r.RectMem()
+    res0 := r.Area()
+    assert res0 == 10
+    unfold (*(b.Rectangle)).RectMem(&r)
+    fold (*(b.Rectangle)).RectMem(&r)
+    res1 := (*(b.Rectangle)).Area(&r)
+    assert res1 == 10
+    unfold r.RectMem()
+}

@@ -1,0 +1,21 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package pkg
+
+requires forall i int :: 0 <= i && i < len(s) ==> acc(&s[i])
+func foo(s []int) {
+  //:: ExpectedOutput(assignment_error:permission_error)
+  n := s[0]
+}
+
+requires forall i int :: { &s[i] } 0 <= i && i < len(s) ==> acc(&s[i])
+requires forall i, j int :: { s[i], s[j] } 0 <= i && i < j && j < len(s) ==> s[i] != s[j] // injectivity
+requires forall i int :: { s[i] } 0 <= i && i < len(s) ==> acc(s[i])
+func bar(s []*int)
+
+func barRun() {
+  s := make([]*int, 2)
+  //:: ExpectedOutput(precondition_error:assertion_error)
+  bar(s)
+}

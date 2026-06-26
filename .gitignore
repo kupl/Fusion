@@ -1,0 +1,147 @@
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# Editor/IDE
+# .idea/
+# .vscode/
+
+# OS generated files #
+#########################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# SCION generated files #
+#########################
+/logs/
+/gen/
+/genold/
+/gen-cache/
+/gen-data/
+/gen-certs/
+/traces/
+
+# Python generated files #
+#########################
+.mypy_cache/
+__pycache__
+*.pyc
+
+# vim files #
+#########################
+.*.sw?
+.ccls
+.vim/
+
+# VSCode folder
+#########################
+.vscode/
+
+# build files
+#########################
+.installstamp
+*.d
+compile_commands.json
+
+# Environment files
+#########################
+/venv/
+
+# Docker working directory
+##########################
+/docker/_build/
+/docker/perapp/hashes/
+
+# Test coverage
+##########################
+/.coverage
+/python/htmlcov/
+
+# C library binaries
+##########################
+*.a
+*.o
+*.so
+
+# Generated executables
+##########################
+/bin/*
+!/bin/.keepme
+
+# CTags
+##########################
+tags
+
+# bazel artifacts
+##########################
+/bazel-*
+!bazel-remote.yml
+.bazel-cache/
+
+# local buildkite run
+/artifacts.out
+
+# documentation builds
+_build
+
+# IntelliJ folder
+#########################
+.idea/
+
+# node modules
+##############
+node_modules
+
+# gobra
+#######
+logger.log
+tmp/
+benchmark/**/*.vpr
+*.debugType
+target
+*.unparsed
+*.gobrafied
+*.internal
+.devcontainer
+.metals
+.bazelbsp
+.bazel
+
+output/*
+!output/sanitized_experiments/
+output/sanitized_experiments/*
+!output/sanitized_experiments/session_20260624_120233_fusion_20.tar.gz
+!output/sanitized_experiments/session_20260624_210224_baseline_20.tar.gz
+!output/sanitized_experiments/session_20260625_124018_fusion_10.tar.gz
+!output/sanitized_experiments/session_20260625_210316_baseline_10.tar.gz
+

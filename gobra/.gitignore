@@ -1,0 +1,41 @@
+.idea/
+.bsp/
+project/project/
+project/target/
+target/
+tmp/
+sync/
+gobra_tmp/
+
+logger.log
+.DS_Store
+
+*.go.*
+*.gobra.*
+*.tokens
+*.interp
+/gen/
+/.gobra/
+gobra_tmp/
+
+.bloop/
+.metals/
+.vscode/
+project/*
+!project/build.properties
+!project/plugins.sbt
+
+
+# antlr4
+*.interp
+*.tokens
+
+# genparser script
+genparser.config
+.genparser/
+
+# generated parser files
+src/main/java/viper/gobra/frontend/GobraLexer.java
+src/main/java/viper/gobra/frontend/GobraParser.java
+src/main/java/viper/gobra/frontend/GobraParserBaseVisitor.java
+src/main/java/viper/gobra/frontend/GobraParserVisitor.java

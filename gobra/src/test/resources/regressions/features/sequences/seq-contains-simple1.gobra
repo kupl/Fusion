@@ -1,0 +1,48 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package pkg
+
+func example1(ghost xs seq[int]) {
+  ghost b := 2 elem xs
+}
+
+func example2() {
+  assert 42 elem seq[1..100]
+  assert 2 elem seq[int] { 1, 2, 3 }
+  assert !(false elem seq[bool] { true })
+}
+
+requires x elem xs && !(y elem xs)
+func example3(x int, y int, ghost xs seq[int]) {
+  assert x != y
+}
+
+requires x elem xs
+requires y elem ys
+ensures x elem xs ++ ys
+ensures y elem xs ++ ys
+func example4(x int, y int, ghost xs seq[int], ghost ys seq[int]) {
+}
+
+func example5() {
+  ghost xs := seq[1..10]
+  ghost ys := seq[bool] { false, false }
+  assert 42 elem xs elem ys
+}
+
+func example6(x int, ghost xs seq[int], ghost ys seq[bool]) {
+  ghost b1 := x elem xs elem ys
+  ghost b2 := (x elem xs) elem ys
+  assert b1 == b2
+}
+
+requires 0 <= n
+ensures !(n elem seq[0 ..n])
+func example7(n int) {
+}
+
+requires 0 < n
+ensures n - 1 elem seq[0 ..n]
+func example8(n int) {
+}

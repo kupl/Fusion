@@ -1,0 +1,4 @@
+{
+  "name": "example-no-folds",
+  "command": "java -jar gobra/target/scala-2.13/gobra.jar -i __TARGET__"
+}

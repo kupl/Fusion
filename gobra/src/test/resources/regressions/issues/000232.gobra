@@ -1,0 +1,14 @@
+// Any copyright is dedicated to the Public Domain.
+// http://creativecommons.org/publicdomain/zero/1.0/
+
+package main
+
+// ##(-I ./000232/)
+
+import "bug"
+
+requires x != nil
+ensures y >= 0
+func bar(x bug.I) (y int) {
+    return x.foo()
+}

@@ -1,0 +1,13 @@
+target
+tmp
+.idea
+.DS_Store
+*.swp
+
+ter.bat
+ver.bat
+.bsp/
+logs/
+.bloop
+.metals
+metals.sbt

@@ -1,0 +1,724 @@
+// Copyright 2022 ETH Zurich
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// +gobra
+
+package router
+
+import (
+	"errors"
+	"hash"
+	"net"
+
+	"github.com/google/gopacket"
+
+	"github.com/scionproto/scion/pkg/addr"
+	"github.com/scionproto/scion/pkg/scrypto"
+	"github.com/scionproto/scion/pkg/slayers"
+	"github.com/scionproto/scion/pkg/slayers/path"
+	"github.com/scionproto/scion/pkg/slayers/path/scion"
+	underlayconn "github.com/scionproto/scion/private/underlay/conn"
+
+	. "github.com/scionproto/scion/verification/utils/definitions"
+	sl "github.com/scionproto/scion/verification/utils/slices"
+)
+
+ghost const MutexPerm perm = 1/4
+ghost const OutMutexPerm perm = 3/4
+ghost const runningPerm perm = 1/2
+
+pred MutexInvariant(d *DataPlane) {
+	acc(&d.running, runningPerm) &&
+	(!d.running ==> acc(d.Mem(), MutexPerm))
+}
+
+pred (d *DataPlane) Mem() {
+	// access to the field 'mtx' ommited
+	acc(&d.external)                                              &&
+	acc(&d.linkTypes)                                             &&
+	acc(&d.neighborIAs)                                           &&
+	acc(&d.internal)                                              &&
+	acc(&d.internalIP)                                            &&
+	acc(&d.internalNextHops)                                      &&
+	acc(&d.svc)                                                   &&
+	acc(&d.macFactory)                                            &&
+	acc(&d.bfdSessions)                                           &&
+	acc(&d.localIA)                                               &&
+	acc(&d.running, 1/2)                                          &&
+	acc(&d.Metrics)                                               &&
+	acc(&d.forwardingMetrics)                                     &&
+	acc(&d.key)                                                   &&
+	(d.external    != nil       ==> accBatchConn(d.external))     &&
+	(d.linkTypes   != nil       ==> acc(d.linkTypes))             &&
+	(d.neighborIAs != nil       ==> acc(d.neighborIAs))           &&
+	(d.internal != nil          ==> d.internal.Mem())             &&
+	(d.internalIP != nil        ==> d.internalIP.Mem())           &&
+	(d.internalNextHops != nil  ==> accAddr(d.internalNextHops))  &&
+	(d.svc != nil               ==> d.svc.Mem())                  &&
+	(d.macFactory != nil        ==> (
+		acc(d.key)                                      &&
+		acc(sl.Bytes(*d.key, 0, len(*d.key)), _)        &&
+		len(*d.key) > 0                                 &&
+		scrypto.ValidKeyForHash(*d.key)                 &&
+		d.macFactory implements MacFactorySpec{d.key}))           &&
+	(d.bfdSessions != nil       ==> accBfdSession(d.bfdSessions)) &&
+	(d.Metrics != nil           ==> acc(d.Metrics.Mem(), _))      &&
+	// The following permissions are enough to call all methods needed in fields
+	// of forwardingMetrics
+	(d.forwardingMetrics != nil ==> accForwardingMetrics(d.forwardingMetrics))
+}
+
+pred accAddr(addrs map[uint16]*net.UDPAddr) {
+	acc(addrs) &&
+	forall a *net.UDPAddr :: { a elem range(addrs) } a elem range(addrs) ==> acc(a.Mem(), _)
+}
+
+pred accBatchConn(batchConns map[uint16]BatchConn) {
+	acc(batchConns) &&
+	forall b BatchConn :: { b elem range(batchConns) }{ b.Mem() } b elem range(batchConns) ==>
+		b!= nil && acc(b.Mem(), _)
+}
+
+pred accBfdSession(bfdSessions map[uint16]bfdSession) {
+	acc(bfdSessions) &&
+	(forall bfd bfdSession :: { bfd elem range(bfdSessions) }{ bfd.Mem() } bfd elem range(bfdSessions) ==>
+		(bfd != nil && acc(bfd.Mem(), _)))
+}
+
+pred accForwardingMetrics(metrics map[uint16]forwardingMetrics) {
+	acc(metrics) &&
+	forall id uint16 :: { metrics[id] } id elem domain(metrics) ==>
+		acc(forwardingMetricsMem(metrics[id], id), _)
+}
+
+pred forwardingMetricsMem(v forwardingMetrics, ignoredForInjectivity uint16) {
+	v.InputBytesTotal.Mem()     &&
+	v.OutputBytesTotal.Mem()    &&
+	v.InputPacketsTotal.Mem()   &&
+	v.OutputPacketsTotal.Mem()  &&
+	v.DroppedPacketsTotal.Mem()
+}
+
+pred forwardingMetricsNonInjectiveMem(v forwardingMetrics) {
+	v.InputBytesTotal.Mem()     &&
+	v.OutputBytesTotal.Mem()    &&
+	v.InputPacketsTotal.Mem()   &&
+	v.OutputPacketsTotal.Mem()  &&
+	v.DroppedPacketsTotal.Mem()
+}
+
+ghost
+requires  acc(forwardingMetricsNonInjectiveMem(v), _)
+ensures   acc(forwardingMetricsMem(v, id), _)
+decreases
+func liftForwardingMetricsNonInjectiveMem(v forwardingMetrics, id uint16) {
+	unfold acc(forwardingMetricsNonInjectiveMem(v), _)
+	fold acc(forwardingMetricsMem(v, id), _)
+}
+
+pred (p *scionPacketProcessor) initMem() {
+	acc(&p.d)                                    &&
+	acc(&p.ingressID)                            &&
+	acc(&p.buffer)                               &&
+	acc(&p.mac)                                  &&
+	acc(p.scionLayer.NonInitMem())               &&
+	p.scionLayer.PathPoolInitializedNonInitMem() &&
+	acc(&p.hbhLayer)                             &&
+	acc(&p.e2eLayer)                             &&
+	acc(&p.lastLayer)                            &&
+	acc(&p.path)                                 &&
+	acc(&p.hopField)                             &&
+	acc(&p.infoField)                            &&
+	acc(&p.segmentChange)                        &&
+	acc(&p.cachedMac)                            &&
+	acc(&p.macBuffers)                           &&
+	acc(&p.bfdLayer)
+}
+
+// This is used as a signature, not as an assumed function.
+requires acc(key, _) && acc(sl.Bytes(*key, 0, len(*key)), _)
+requires scrypto.ValidKeyForHash(*key)
+ensures  acc(key, _) && acc(sl.Bytes(*key, 0, len(*key)), _)
+ensures  res != nil && res.Mem()
+decreases
+func MacFactorySpec(ghost key *[]byte) (res hash.Hash)
+
+// useful to deal with incompletnesses
+pred hideLocalIA(p *addr.IA) {
+	acc(p)
+}
+
+pred (err scmpError) ErrorMem() {
+	err.Cause != nil ==> err.Cause.ErrorMem()
+}
+
+scmpError implements error
+
+type offsetPair struct {
+	start int
+	end int
+	isNil bool
+}
+
+ghost
+pure
+requires 0 <= n
+ensures  len(res) == n
+ensures  forall i int :: {res[i]} 0 <= i && i < len(res) ==> res[i] == offsetPair{}
+decreases
+func newOffsetPair(n int) (res seq[offsetPair])
+
+/**** Acessor methods to avoid unfolding the Mem predicate of the dataplane so much ****/
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.internalNextHops, _)
+ensures  d.internalNextHops != nil ==> acc(accAddr(d.internalNextHops), _)
+decreases
+func (d *DataPlane) getInternalNextHops() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.forwardingMetrics, _)
+ensures  d.forwardingMetrics != nil ==>
+	acc(accForwardingMetrics(d.forwardingMetrics), _)
+decreases
+func (d *DataPlane) getForwardingMetrics() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) getValForwardingMetrics() map[uint16]forwardingMetrics {
+	return unfolding d.Mem() in
+		d.forwardingMetrics
+}
+
+ghost
+requires p.sInit()
+decreases
+pure func (p *scionPacketProcessor) getIngressID() uint16 {
+	return unfolding p.sInit() in
+		p.ingressID
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) getMacFactory() func() hash.Hash {
+	return unfolding d.Mem() in
+		d.macFactory
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) getDomForwardingMetrics() set[uint16] {
+	return unfolding d.Mem() in
+		d.forwardingMetrics == nil ?
+			set[uint16]{} :
+			(unfolding accForwardingMetrics(d.forwardingMetrics) in
+				domain(d.forwardingMetrics))
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) GetDomInternalNextHops() set[uint16] {
+	return unfolding d.Mem() in
+		d.internalNextHops == nil ?
+			set[uint16]{} :
+			(unfolding accAddr(d.internalNextHops) in
+				domain(d.internalNextHops))
+}
+
+ghost
+opaque
+requires d.Mem()
+decreases
+pure func (d *DataPlane) getDomExternal() set[uint16] {
+	return unfolding d.Mem() in
+		d.external == nil ?
+			set[uint16]{} :
+			(unfolding accBatchConn(d.external) in
+				domain(d.external))
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) getDomNeighborIAs() set[uint16] {
+	return unfolding d.Mem() in
+		d.neighborIAs == nil ?
+			set[uint16]{} : domain(d.neighborIAs)
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) getDomLinkTypes() set[uint16] {
+	return unfolding d.Mem() in
+		d.linkTypes == nil ?
+			set[uint16]{} : domain(d.linkTypes)
+}
+
+ghost
+opaque
+requires d.Mem()
+decreases
+pure func (d *DataPlane) WellConfigured() bool {
+	return d.getDomNeighborIAs() == d.getDomExternal() &&
+		d.getDomNeighborIAs() == d.getDomLinkTypes() &&
+		!(0 elem d.getDomNeighborIAs()) &&
+		d.getDomExternal() subset d.getDomForwardingMetrics()
+}
+
+ghost
+opaque
+requires d.Mem()
+decreases
+pure func (d *DataPlane) PreWellConfigured() bool {
+	return d.getDomNeighborIAs() == d.getDomExternal() &&
+		d.getDomExternal() == d.getDomLinkTypes() &&
+		!(0 elem d.getDomNeighborIAs()) &&
+		d.getDomExternal() intersection d.GetDomInternalNextHops() == set[uint16]{}
+}
+
+ghost
+requires acc(d.Mem(), _)
+requires id elem d.getDomForwardingMetrics()
+ensures  acc(&d.forwardingMetrics, _)
+ensures  acc(d.forwardingMetrics, _)
+ensures  acc(forwardingMetricsMem(d.forwardingMetrics[id], id), _)
+decreases
+func (d *DataPlane) getForwardingMetricsMem(id uint16) {
+	unfold acc(d.Mem(), _)
+	assert id elem d.getDomForwardingMetrics()
+	assert d.getDomForwardingMetrics() == (d.forwardingMetrics == nil ?
+		set[uint16]{} :
+		(unfolding acc(accForwardingMetrics(d.forwardingMetrics), _) in
+				domain(d.forwardingMetrics)))
+	assert id elem (d.forwardingMetrics == nil ?
+		set[uint16]{} :
+		(unfolding acc(accForwardingMetrics(d.forwardingMetrics), _) in
+				domain(d.forwardingMetrics)))
+	unfold acc(accForwardingMetrics(d.forwardingMetrics), _)
+	assert id elem domain(d.forwardingMetrics)
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.external, _)
+ensures  d.external != nil ==> acc(accBatchConn(d.external), _)
+decreases
+func (d *DataPlane) getExternalMem() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.linkTypes, _)
+ensures  d.linkTypes != nil ==> acc(d.linkTypes, _)
+decreases
+func (d *DataPlane) getLinkTypesMem() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.localIA, _)
+decreases
+func (d *DataPlane) getLocalIA() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.neighborIAs, _)
+ensures  d.neighborIAs != nil ==> acc(d.neighborIAs, _)
+decreases
+func (d *DataPlane) getNeighborIAs() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _) && d.getValSvc() != nil
+ensures  acc(&d.svc, _)
+ensures  d.svc != nil && acc(d.svc.Mem(), _)
+decreases
+func (d *DataPlane) getSvcMem() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _) && d.InternalConnIsSet()
+ensures  acc(&d.internal, _) && acc(d.internal.Mem(), _)
+decreases
+func (d *DataPlane) getInternalMem() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.running, _)
+decreases
+func (d *DataPlane) getRunningMem() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) getValSvc() *services {
+	return unfolding d.Mem() in
+		d.svc
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) SvcsAreSet() bool {
+	return unfolding d.Mem() in
+		d.svc != nil
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.bfdSessions, _)
+ensures  d.bfdSessions != nil ==> acc(accBfdSession(d.bfdSessions), _)
+decreases
+func (d *DataPlane) getBfdSessionsMem() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _)
+ensures  acc(&d.internal, _)
+ensures  d.internal != nil ==> acc(d.internal.Mem(), _)
+decreases
+func (d *DataPlane) getInternal() {
+	unfold acc(d.Mem(), _)
+}
+
+ghost
+requires acc(d.Mem(), _) && d.getMacFactory() != nil
+ensures  acc(&d.macFactory, _) && acc(&d.key, _) && acc(d.key, _)
+ensures  acc(sl.Bytes(*d.key, 0, len(*d.key)), _)
+ensures  scrypto.ValidKeyForHash(*d.key)
+ensures  len(*d.key) > 0
+ensures  d.macFactory implements MacFactorySpec{d.key}
+decreases
+func (d *DataPlane) getNewPacketProcessorFootprint() {
+	unfold acc(d.Mem(), _)
+}
+
+type Unit struct{}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) IsRunning() bool {
+	return unfolding d.Mem() in
+		d.running
+}
+
+ghost
+opaque
+requires d.Mem()
+requires acc(&d.running)
+ensures  d.IsRunning() == d.running
+decreases
+pure func (d *DataPlane) isRunningEq() Unit {
+	return unfolding d.Mem() in
+		Unit{}
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) InternalConnIsSet() bool {
+	return unfolding d.Mem() in
+		d.internal != nil
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) MetricsAreSet() bool {
+	return unfolding d.Mem() in
+		d.Metrics != nil
+}
+
+ghost
+opaque
+requires d.Mem()
+requires acc(&d.internal)
+ensures  d.InternalConnIsSet() == (d.internal != nil)
+decreases
+pure func (d *DataPlane) internalIsSetEq() Unit {
+	return unfolding d.Mem() in
+		Unit{}
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) KeyIsSet() bool {
+	return unfolding d.Mem() in
+		d.macFactory != nil
+}
+
+ghost
+opaque
+requires d.Mem()
+requires acc(&d.macFactory)
+ensures  d.KeyIsSet() == (d.macFactory != nil)
+decreases
+pure func (d *DataPlane) keyIsSetEq() Unit {
+	return unfolding d.Mem() in
+		Unit{}
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) LocalIA() addr.IA {
+	return unfolding d.Mem() in
+		d.localIA
+}
+
+/**** End of acessor methods to avoid unfolding the Mem predicate of the dataplane so much ****/
+
+ghost
+requires bfdSessions != nil ==> acc(bfdSessions, R50)
+requires v elem range(bfdSessions)
+requires acc(accBfdSession(bfdSessions), R50)
+ensures  bfdSessions != nil ==> acc(bfdSessions, R50)
+ensures  acc(accBfdSession(bfdSessions), R50)
+ensures  v != nil && acc(v.Mem(), _)
+decreases
+func getBfdSessionMem(v bfdSession, bfdSessions map[uint16]bfdSession) {
+	unfold acc(accBfdSession(bfdSessions), R55)
+	fold acc(accBfdSession(bfdSessions), R55)
+}
+
+/** definitions used internally for the proof of Run **/
+
+pred writeMsgInv(writeMsgs underlayconn.Messages) {
+	len(writeMsgs) == 1 &&
+	acc(&writeMsgs[0]) &&
+	len(writeMsgs[0].Buffers) == 1 &&
+	acc(&writeMsgs[0].Buffers[0]) &&
+	// sl.Bytes(writeMsgs[0].Buffers[0], 0, len(writeMsgs[0].Buffers[0])) &&
+	sl.Bytes(writeMsgs[0].OOB, 0, len(writeMsgs[0].OOB)) &&
+	0 <= writeMsgs[0].N
+}
+/** end of definitions used internally for the proof of Run **/
+
+/** ErrorCell **/
+pred (s *scmpError) Mem() {
+	acc(s)
+}
+
+preserves s.Mem() && s.CanSet(e)
+ensures   s.Get() === e
+decreases
+func (s *scmpError) Set(e error) {
+	unfold s.Mem()
+	defer fold s.Mem()
+	newErr := e.(scmpError)
+	*s = newErr
+}
+
+ghost
+requires s.Mem()
+decreases
+pure func (s *scmpError) Get() error {
+	return unfolding s.Mem() in *s
+}
+
+ghost
+decreases
+pure func (s *scmpError) CanSet(e error) bool {
+	return typeOf(e) == type[scmpError]
+}
+
+/** spec for newPacketProcessor **/
+
+// initial state, established after allocating with newPacketProcessor.
+pred (s* scionPacketProcessor) sInit() {
+	acc(&s.d)                                    &&
+	acc(&s.ingressID)                            &&
+	acc(&s.buffer) && s.buffer != nil            &&
+	s.buffer.Mem()                               &&
+	acc(&s.mac) && s.mac != nil && s.mac.Mem()   &&
+	s.scionLayer.NonInitMem()                    &&
+	// The following is not necessary
+	// s.scionLayer.PathPoolInitializedNonInitMem() &&
+	s.hbhLayer.NonInitMem()                      &&
+	s.e2eLayer.NonInitMem()                      &&
+	acc(&s.lastLayer)                            &&
+	acc(&s.path)                                 &&
+	acc(&s.hopField)                             &&
+	acc(&s.infoField)                            &&
+	acc(&s.segmentChange)                        &&
+	acc(&s.cachedMac)                            &&
+	acc(&s.macBuffers)                           &&
+	sl.Bytes(s.macBuffers.scionInput, 0, len(s.macBuffers.scionInput)) &&
+	s.bfdLayer.NonInitMem()                      &&
+	acc(&s.srcAddr)                              &&
+	acc(&s.rawPkt)
+}
+
+// each ghost method on *scionPacketProcessor has, in the name, the state in which it
+// expects to find the packet processor. In the case below, the state `Init` is expected.
+ghost
+requires s.sInit()
+decreases
+pure func (s* scionPacketProcessor) sInitD() (res *DataPlane) {
+	return unfolding s.sInit() in s.d
+}
+
+ghost
+requires s.sInit()
+decreases
+pure func (s* scionPacketProcessor) sInitRawPkt() (res []byte) {
+	return unfolding s.sInit() in s.rawPkt
+}
+
+ghost
+requires s.sInit()
+decreases
+pure func (s* scionPacketProcessor) sInitPath() (res *scion.Raw) {
+	return unfolding s.sInit() in s.path
+}
+
+ghost
+requires s.sInit()
+decreases
+pure func (s* scionPacketProcessor) sInitHopField() (res path.HopField) {
+	return unfolding s.sInit() in s.hopField
+}
+
+ghost
+requires s.sInit()
+decreases
+pure func (s* scionPacketProcessor) sInitInfoField() (res path.InfoField) {
+	return unfolding s.sInit() in s.infoField
+}
+
+ghost
+requires s.sInit()
+decreases
+pure func (s* scionPacketProcessor) sInitSegmentChange() (res bool) {
+	return unfolding s.sInit() in s.segmentChange
+}
+
+ghost
+requires s.sInit()
+decreases
+pure func (s* scionPacketProcessor) sInitBufferUBuf() (res []byte) {
+	return unfolding s.sInit() in s.buffer.UBuf()
+}
+
+/** end spec for newPacketProcessor **/
+
+ghost
+requires hasScionLayer ==> scionLayer.Mem(ubScionLayer)
+requires hasHbhLayer   ==> hbhLayer.Mem(ubHbhLayer)
+requires hasE2eLayer   ==> e2eLayer.Mem(ubE2eLayer)
+ensures  hasScionLayer ==> scionLayer.NonInitMem()
+ensures  hasHbhLayer   ==> hbhLayer.NonInitMem()
+ensures  hasE2eLayer   ==> e2eLayer.NonInitMem()
+decreases
+func ResetDecodingLayers(
+	scionLayer *slayers.SCION,
+	hbhLayer *slayers.HopByHopExtnSkipper,
+	e2eLayer *slayers.EndToEndExtnSkipper,
+	ubScionLayer []byte,
+	ubHbhLayer   []byte,
+	ubE2eLayer   []byte,
+	hasScionLayer bool,
+	hasHbhLayer   bool,
+	hasE2eLayer   bool,
+) {
+	if hasScionLayer {
+		scionLayer.DowngradePerm(ubScionLayer)
+	}
+	if hasHbhLayer {
+		hbhLayer.DowngradePerm(ubHbhLayer)
+	}
+	if hasE2eLayer {
+		e2eLayer.DowngradePerm(ubE2eLayer)
+	}
+}
+
+pred (d *DataPlane) validResult(result processResult, addrAliasesPkt bool) {
+	acc(d.Mem(), _)    &&
+	// EgressID
+	(result.EgressID != 0 ==> result.EgressID elem d.getDomForwardingMetrics()) &&
+	// OutConn
+	(result.OutConn != nil ==> acc(result.OutConn.Mem(), _)) &&
+	// OutAddr
+	(addrAliasesPkt  && result.OutAddr != nil ==> acc(result.OutAddr.Mem(), R15)) &&
+	(!addrAliasesPkt && result.OutAddr != nil ==> acc(result.OutAddr.Mem(), _))
+	// OutPkt moved out
+}
+
+ghost
+requires acc(d.Mem(), _) && d.WellConfigured()
+requires id elem d.getDomExternal()
+ensures  acc(d.Mem(), _)
+ensures  id elem d.getDomForwardingMetrics()
+decreases
+func (d *DataPlane) InDomainExternalInForwardingMetrics(id uint16) {
+	reveal d.WellConfigured()
+}
+
+ghost
+requires acc(d.Mem(), _) && d.WellConfigured()
+requires acc(&d.external, _) && acc(d.external, R55)
+requires id elem domain(d.external)
+ensures  acc(d.Mem(), _)
+ensures  acc(&d.external, _) && acc(d.external, R55)
+ensures  id elem d.getDomForwardingMetrics()
+decreases
+func (d *DataPlane) InDomainExternalInForwardingMetrics3(id uint16) {
+	reveal d.WellConfigured()
+	reveal d.getDomExternal()
+	assert unfolding acc(d.Mem(), _) in
+		(unfolding acc(accBatchConn(d.external), _) in true)
+}
+
+ghost
+requires acc(&d.forwardingMetrics)
+requires accForwardingMetrics(d.forwardingMetrics)
+decreases
+pure func (d *DataPlane) domainForwardingMetrics() set[uint16] {
+	return unfolding accForwardingMetrics(d.forwardingMetrics) in
+		domain(d.forwardingMetrics)
+}
+
+ghost
+requires d.Mem()
+decreases
+pure func (d *DataPlane) DomainForwardingMetrics() set[uint16] {
+	return unfolding d.Mem() in
+		d.forwardingMetrics != nil ?
+			unfolding accForwardingMetrics(d.forwardingMetrics) in
+				domain(d.forwardingMetrics) :
+			set[uint16]{}
+}
