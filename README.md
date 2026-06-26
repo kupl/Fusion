@@ -99,8 +99,8 @@ cd /workspace/fusion
 python src/fusion_gobra.py \
   --all-foldbench \
   --exp-list benchmark/verifiedscion_exp_list.txt \
-  --mode MODE \
-  --max-attempts N \
+  --mode ours \
+  --max-attempts 20 \
   --kill-z3-on-task-start true
 ```
 
