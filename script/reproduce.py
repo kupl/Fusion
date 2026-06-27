@@ -722,8 +722,8 @@ def generate_figure5_plot(repo_root: Path, series_list: Sequence[SessionSeries])
             label=figure5_legend_label(series.mode),
         )
 
-    plt.xlabel("Per-function repair time (minutes)", fontsize=16)
-    plt.ylabel("# of solved functions", fontsize=16)
+    plt.xlabel("Per-function synthesis time (minutes)", fontsize=16)
+    plt.ylabel("\# of solved functions", fontsize=16)
     plt.xlim(left=0.0, right=FIGURE5_X_AXIS_MAX_MINUTES)
     plt.xticks([0, 5, 10, 15, 20], ["0", "5", "10", "15", "20"])
     plt.ylim(bottom=0, top=100)
